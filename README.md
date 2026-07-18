@@ -70,6 +70,18 @@ report is both `VERIFIED` and current.
 worktree stayed unchanged while checks ran. Generated `report.json` and
 `report.md` files are excluded from that cleanliness check.
 
+## What the evidence means
+
+A current `VERIFIED` report establishes that:
+
+- the configured commands ran against the recorded base and head commit SHAs;
+- every configured command exited successfully;
+- HEAD and the worktree remained unchanged while the commands ran.
+
+It does not establish that the configured checks are sufficient, that the code
+is semantically correct, or that repository commands are sandboxed. Maintainers
+still own the verification policy they commit in `proof-pr.toml`.
+
 ## GitHub Action
 
 The composite action runs repository checks, enforces fresh evidence, and
@@ -94,7 +106,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: HsiangNianian/proof-pr@v0.1.0
+      - uses: HsiangNianian/proof-pr@v0.1.1
         with:
           base: ${{ github.event.pull_request.base.sha }}
 ```
@@ -117,6 +129,27 @@ Outputs:
 Commands are parsed into argument vectors and run without a shell. Pipelines,
 redirects, and environment interpolation are deliberately unsupported in the
 MVP.
+
+## Real-world evidence
+
+[`HsiangNianian/soon` PR #3](https://github.com/HsiangNianian/soon/pull/3)
+uses the released `proof-pr@v0.1.0` action from a separate Rust repository. Its
+[hosted run](https://github.com/HsiangNianian/soon/actions/runs/29637737475)
+demonstrates both sides of the contract against PR head
+`7f37f054e2333a351dd94ccea3d528ac6e5d17ad`:
+
+- real `cargo check`, `cargo test`, and CLI smoke checks produced `VERIFIED`;
+- an intentional exit code `9` produced `FAILED`, a failing action outcome, and
+  a report that the consumer workflow independently checked.
+
+The integration is now merged on `soon` and its merge commit was verified again
+with the same repository policy.
+
+## Support and contributing
+
+Use [GitHub Issues](https://github.com/HsiangNianian/proof-pr/issues) for bugs
+and feature requests. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a
+pull request and [SECURITY.md](SECURITY.md) for private vulnerability reports.
 
 ## Development
 

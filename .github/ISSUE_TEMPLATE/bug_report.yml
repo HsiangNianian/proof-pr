@@ -1,0 +1,57 @@
+name: Bug report
+description: Report incorrect verification behavior or unusable evidence
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Remove secrets and private repository data before submitting evidence.
+
+  - type: input
+    id: version
+    attributes:
+      label: proof-pr version
+      description: Release tag or full commit SHA used by the workflow
+      placeholder: v0.1.1
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Include the observed and expected behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow excerpt
+      description: Include the checkout and proof-pr steps.
+      render: yaml
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Verification configuration
+      description: Include the relevant proof-pr.toml content.
+      render: toml
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and logs
+      description: Include a redacted report, job summary, or hosted run URL.
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed secrets and private repository data from this report.
+          required: true
