@@ -1,0 +1,106 @@
+name: "proof-pr"
+description: "Generate commit-bound verification evidence and publish a GitHub job summary"
+author: "HsiangNianian"
+
+inputs:
+  base:
+    description: "Base Git ref or commit SHA"
+    required: true
+  config:
+    description: "Repository-relative proof-pr configuration path"
+    required: false
+    default: "proof-pr.toml"
+  output-dir:
+    description: "Repository-relative evidence output directory"
+    required: false
+    default: ".proof-pr"
+  python-version:
+    description: "Python version used to run proof-pr"
+    required: false
+    default: "3.11"
+
+outputs:
+  verdict:
+    description: "VERIFIED, FAILED, STALE, or ERROR"
+    value: ${{ steps.summary.outputs.verdict }}
+  report-json:
+    description: "Path to the machine-readable evidence report"
+    value: ${{ steps.summary.outputs.report-json }}
+  report-markdown:
+    description: "Path to the Markdown evidence report"
+    value: ${{ steps.summary.outputs.report-markdown }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Generate evidence
+      id: verify
+      continue-on-error: true
+      shell: bash
+      env:
+        PROOF_PR_RUNNER: ${{ github.action_path }}/scripts/run-proof-pr.py
+        PROOF_PR_BASE: ${{ inputs.base }}
+        PROOF_PR_CONFIG: ${{ inputs.config }}
+        PROOF_PR_OUTPUT_DIR: ${{ inputs.output-dir }}
+      run: >-
+        python "$PROOF_PR_RUNNER" verify
+        --base "$PROOF_PR_BASE"
+        --config "$PROOF_PR_CONFIG"
+        --output-dir "$PROOF_PR_OUTPUT_DIR"
+
+    - name: Publish evidence summary
+      id: summary
+      if: always()
+      shell: bash
+      env:
+        PROOF_PR_OUTPUT_DIR: ${{ inputs.output-dir }}
+      run: |
+        report_json="$PROOF_PR_OUTPUT_DIR/report.json"
+        report_markdown="$PROOF_PR_OUTPUT_DIR/report.md"
+
+        if [[ -f "$report_json" && -f "$report_markdown" ]]; then
+          cat "$report_markdown" >> "$GITHUB_STEP_SUMMARY"
+          verdict="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["verdict"])' "$report_json")"
+        else
+          verdict="ERROR"
+          {
+            echo "# proof-pr evidence"
+            echo
+            echo '**Verdict:** `ERROR`'
+            echo
+            echo "No evidence report was generated. Inspect the verification step logs."
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        {
+          echo "verdict=$verdict"
+          echo "report-json=$report_json"
+          echo "report-markdown=$report_markdown"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Enforce current evidence
+      if: always()
+      shell: bash
+      env:
+        PROOF_PR_RUNNER: ${{ github.action_path }}/scripts/run-proof-pr.py
+        PROOF_PR_CONFIG: ${{ inputs.config }}
+        PROOF_PR_OUTPUT_DIR: ${{ inputs.output-dir }}
+        PROOF_PR_VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+      run: |
+        status_code=0
+        python "$PROOF_PR_RUNNER" status \
+          --config "$PROOF_PR_CONFIG" \
+          --report "$PROOF_PR_OUTPUT_DIR/report.json" || status_code=$?
+
+        if [[ "$PROOF_PR_VERIFY_OUTCOME" != "success" || "$status_code" -ne 0 ]]; then
+          exit 1
+        fi
+
+branding:
+  icon: "check-circle"
+  color: "green"

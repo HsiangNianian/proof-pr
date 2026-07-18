@@ -44,6 +44,10 @@ The command:
 `proof-pr status` compares saved evidence with the current HEAD and worktree. It
 returns `STALE` when either has changed since verification.
 
+The composite GitHub Action runs the same contract against the pull request
+head, publishes `report.md` to the workflow Job Summary even when checks fail,
+and fails the job unless the final evidence is current and `VERIFIED`.
+
 ## Acceptance criteria
 
 - Reports are deterministic apart from timestamps and command duration.
@@ -57,6 +61,8 @@ returns `STALE` when either has changed since verification.
 - CLI values override repository defaults for one-off verification.
 - Verification refuses a dirty worktree and detects repository changes during checks.
 - Saved evidence reports `STALE` after a new commit or uncommitted code change.
+- The GitHub Action exposes verdict and report paths as outputs.
+- The example PR workflow uses read-only permissions and the exact PR head SHA.
 
 ## Non-goals
 
@@ -70,5 +76,5 @@ returns `STALE` when either has changed since verification.
 ## Next slices
 
 1. Diff-to-test evidence and reusable policy gates.
-2. GitHub Action and sticky PR evidence comment.
+2. Sticky PR evidence comments through an isolated trusted publisher.
 3. Signed provenance and reusable policy gates.

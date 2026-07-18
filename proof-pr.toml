@@ -5,12 +5,12 @@ output_dir = ".proof-pr"
 
 [[verify.checks]]
 name = "tests"
-command = ["python3", "-m", "unittest", "-v"]
+command = ["python3", "scripts/run-tests.py"]
 
 [[verify.checks]]
 name = "lint"
-command = ["ruff", "check", "src", "tests"]
+command = ["ruff", "check", "src", "tests", "scripts"]
 
 [[verify.checks]]
 name = "format"
-command = ["ruff", "format", "--check", "src", "tests"]
+command = ["ruff", "format", "--check", "src", "tests", "scripts"]

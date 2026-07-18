@@ -68,6 +68,44 @@ report is both `VERIFIED` and current.
 worktree stayed unchanged while checks ran. Generated `report.json` and
 `report.md` files are excluded from that cleanliness check.
 
+## GitHub Action
+
+The composite action runs repository checks, enforces fresh evidence, and
+publishes the Markdown report to the workflow Job Summary:
+
+```yaml
+name: proof-pr
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: HsiangNianian/proof-pr@v1
+        with:
+          base: ${{ github.event.pull_request.base.sha }}
+```
+
+Pin the action to a release tag or full commit SHA in production. The checkout
+must include Git history so `proof-pr` can resolve the base commit.
+
+The included [.github/workflows/proof-pr.yml](.github/workflows/proof-pr.yml)
+uses the local action to verify this repository itself. It deliberately uses
+the `pull_request` event with a read-only token and does not post PR comments.
+Do not switch it to `pull_request_target` while executing checks defined by PR
+code; that would combine untrusted commands with a privileged workflow.
+
 Outputs:
 
 - `.proof-pr/report.json` for automation;
@@ -81,7 +119,7 @@ MVP.
 ## Development
 
 ```bash
-PYTHONPATH=src python -m unittest -v
+python scripts/run-tests.py
 ```
 
 See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) for scope and planned slices.
