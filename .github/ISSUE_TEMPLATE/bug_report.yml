@@ -11,8 +11,8 @@ body:
     id: version
     attributes:
       label: proof-pr version
-      description: Release tag or full commit SHA used by the workflow
-      placeholder: v0.1.1
+      description: Copy the release tag or full commit SHA from the workflow uses line
+      placeholder: vX.Y.Z or full commit SHA
     validations:
       required: true
 
