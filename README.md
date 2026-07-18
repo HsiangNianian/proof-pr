@@ -94,7 +94,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: HsiangNianian/proof-pr@v1
+      - uses: HsiangNianian/proof-pr@v0.1.0
         with:
           base: ${{ github.event.pull_request.base.sha }}
 ```
