@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.1.1 - 2026-07-18
+
+### Documentation
+
+- Document successful positive and negative verification paths from the first external consumer.
+- Explain what commit-bound evidence proves and which guarantees remain outside the project scope.
+- Add contribution guidance, private security reporting, and a structured bug report form.
+- Refine the Action metadata and usage example for the GitHub Marketplace release.
+
 ## 0.1.0 - 2026-07-18
 
 ### Features
