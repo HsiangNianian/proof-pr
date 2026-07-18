@@ -55,6 +55,8 @@ class GithubActionContractTests(unittest.TestCase):
         self.assertNotIn("pull-requests: write", workflow)
         self.assertNotIn("secrets.", workflow)
         self.assertIn("actions/checkout@v6", workflow)
+        self.assertIn("actions/setup-python@v6", workflow)
+        self.assertIn("python -m pip install ruff==0.14.11", workflow)
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn("fetch-depth: 0", workflow)
         self.assertIn("ref: ${{ github.event.pull_request.head.sha }}", workflow)
