@@ -1,5 +1,7 @@
 # proof-pr
 
+[![proof-pr](https://github.com/HsiangNianian/proof-pr/actions/workflows/proof-pr.yml/badge.svg)](https://github.com/HsiangNianian/proof-pr/actions/workflows/proof-pr.yml)
+
 Commit-bound verification evidence for pull requests.
 
 AI coding tools often report that tests passed without leaving reviewers a
