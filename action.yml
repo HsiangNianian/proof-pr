@@ -1,5 +1,5 @@
 name: "proof-pr"
-description: "Generate commit-bound verification evidence and publish a GitHub job summary"
+description: "Run repository checks and publish commit-bound verification evidence for pull requests"
 author: "HsiangNianian"
 
 inputs:
