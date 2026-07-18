@@ -7,9 +7,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from proof_pr.config import load_config
-from proof_pr.git_context import GitContextError, resolve_git_context
+from proof_pr.git_context import (
+    GitContextError,
+    assert_clean_worktree,
+    assert_repository_unchanged,
+    current_head,
+    resolve_git_context,
+    worktree_changes,
+)
 from proof_pr.models import EvidenceReport
-from proof_pr.reporting import write_report
+from proof_pr.reporting import read_report_summary, write_report
 from proof_pr.runner import parse_check, run_check
 
 
@@ -31,6 +38,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     verify.add_argument("--timeout", type=int, help="seconds per check")
     verify.add_argument("--output-dir", type=Path)
+
+    status = subparsers.add_parser("status", help="check whether saved evidence is current")
+    status.add_argument("--repo", type=Path, default=Path.cwd())
+    status.add_argument("--config", type=Path, default=Path("proof-pr.toml"))
+    status.add_argument("--report", type=Path, help="report JSON path")
     return parser
 
 
@@ -38,12 +50,40 @@ def _timestamp() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def _verify(args: argparse.Namespace) -> int:
-    repo = args.repo.resolve()
+def _load_config(args: argparse.Namespace, repo: Path):
     config_path = args.config
     if not config_path.is_absolute():
         config_path = repo / config_path
-    config = load_config(config_path)
+    return load_config(config_path)
+
+
+def _resolve_output_dir(repo: Path, configured: Path | None, override: Path | None) -> Path:
+    output_dir = override if override is not None else configured
+    if output_dir is None:
+        output_dir = Path(".proof-pr")
+    if not output_dir.is_absolute():
+        output_dir = repo / output_dir
+    return output_dir
+
+
+def _report_files(output_dir: Path) -> tuple[Path, Path]:
+    return output_dir / "report.json", output_dir / "report.md"
+
+
+def _evidence_paths(
+    repo: Path,
+    configured_output: Path | None,
+    selected_output: Path,
+) -> tuple[Path, ...]:
+    paths = list(_report_files(selected_output))
+    configured_dir = _resolve_output_dir(repo, configured_output, None)
+    paths.extend(_report_files(configured_dir))
+    return tuple(dict.fromkeys(paths))
+
+
+def _verify(args: argparse.Namespace) -> int:
+    repo = args.repo.resolve()
+    config = _load_config(args, repo)
 
     base = args.base if args.base is not None else config.base
     if base is None:
@@ -62,10 +102,18 @@ def _verify(args: argparse.Namespace) -> int:
     if timeout <= 0:
         raise ValueError("--timeout must be greater than zero")
 
+    output_dir = _resolve_output_dir(repo, config.output_dir, args.output_dir)
+    evidence_paths = _evidence_paths(repo, config.output_dir, output_dir)
+    assert_clean_worktree(repo, excluded_paths=evidence_paths)
     context = resolve_git_context(repo, base)
     results = tuple(
         run_check(name, command, cwd=repo, timeout_seconds=timeout)
         for name, command in parsed_checks
+    )
+    assert_repository_unchanged(
+        repo,
+        context.head_sha,
+        excluded_paths=evidence_paths,
     )
     report = EvidenceReport(
         head_sha=context.head_sha,
@@ -76,11 +124,6 @@ def _verify(args: argparse.Namespace) -> int:
         generated_at=_timestamp(),
     )
 
-    output_dir = args.output_dir if args.output_dir is not None else config.output_dir
-    if output_dir is None:
-        output_dir = Path(".proof-pr")
-    if not output_dir.is_absolute():
-        output_dir = repo / output_dir
     json_path, markdown_path = write_report(report, output_dir)
 
     print(f"proof-pr: {report.verdict}")
@@ -93,12 +136,48 @@ def _verify(args: argparse.Namespace) -> int:
     return 0 if report.verified else 1
 
 
+def _status(args: argparse.Namespace) -> int:
+    repo = args.repo.resolve()
+    config = _load_config(args, repo)
+    configured_output = _resolve_output_dir(repo, config.output_dir, None)
+
+    if args.report is None:
+        report_path = configured_output / "report.json"
+    else:
+        report_path = args.report
+        if not report_path.is_absolute():
+            report_path = repo / report_path
+
+    summary = read_report_summary(report_path)
+    head_sha = current_head(repo)
+    report_output = report_path.parent
+    evidence_paths = _evidence_paths(repo, config.output_dir, report_output)
+    changes = worktree_changes(repo, excluded_paths=evidence_paths)
+
+    reasons: list[str] = []
+    if summary.head_sha != head_sha:
+        reasons.append("HEAD changed after verification")
+    if changes:
+        reasons.append("worktree has uncommitted changes")
+
+    verdict = "STALE" if reasons else summary.verdict
+    print(f"proof-pr: {verdict}")
+    print(f"Report HEAD: {summary.head_sha}")
+    print(f"Current HEAD: {head_sha}")
+    print(f"Evidence: {report_path}")
+    for reason in reasons:
+        print(f"Reason: {reason}")
+    return 0 if verdict == "VERIFIED" else 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
     try:
         if args.command == "verify":
             return _verify(args)
+        if args.command == "status":
+            return _status(args)
     except (GitContextError, OSError, ValueError) as exc:
         print(f"proof-pr: error: {exc}", file=sys.stderr)
         return 2

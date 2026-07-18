@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 from proof_pr.cli import main
@@ -128,7 +130,19 @@ class CliSmokeTests(unittest.TestCase):
                 check=True,
             )
             (repo / "example.txt").write_text("first\n", encoding="utf-8")
-            subprocess.run(["git", "add", "example.txt"], cwd=repo, check=True)
+            (repo / "proof-pr.toml").write_text(
+                f"""
+[verify]
+base = "HEAD^"
+timeout = 10
+
+[[verify.checks]]
+name = "smoke"
+command = [{json.dumps(sys.executable)}, "-c", "print('ok')"]
+""".strip(),
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "add", "example.txt", "proof-pr.toml"], cwd=repo, check=True)
             subprocess.run(["git", "commit", "-m", "test: add fixture"], cwd=repo, check=True)
             base_sha = subprocess.run(
                 ["git", "rev-parse", "HEAD"],
@@ -140,18 +154,6 @@ class CliSmokeTests(unittest.TestCase):
             (repo / "example.txt").write_text("second\n", encoding="utf-8")
             subprocess.run(["git", "add", "example.txt"], cwd=repo, check=True)
             subprocess.run(["git", "commit", "-m", "test: update fixture"], cwd=repo, check=True)
-            (repo / "proof-pr.toml").write_text(
-                f"""
-[verify]
-base = "{base_sha}"
-timeout = 10
-
-[[verify.checks]]
-name = "smoke"
-command = [{json.dumps(sys.executable)}, "-c", "print('ok')"]
-""".strip(),
-                encoding="utf-8",
-            )
 
             exit_code = main(
                 [
@@ -168,6 +170,22 @@ command = [{json.dumps(sys.executable)}, "-c", "print('ok')"]
             self.assertEqual(payload["changed_files"], ["example.txt"])
             self.assertEqual(payload["verdict"], "VERIFIED")
             self.assertEqual(payload["checks"][0]["name"], "smoke")
+            self.assertEqual(main(["status", "--repo", str(repo)]), 0)
+
+            dirty_path = repo / "dirty.txt"
+            dirty_path.write_text("uncommitted\n", encoding="utf-8")
+            status_output = io.StringIO()
+            with redirect_stdout(status_output):
+                dirty_status = main(["status", "--repo", str(repo)])
+            self.assertEqual(dirty_status, 1)
+            self.assertIn("STALE", status_output.getvalue())
+
+            verify_error = io.StringIO()
+            with redirect_stderr(verify_error):
+                dirty_verify = main(["verify", "--repo", str(repo)])
+            self.assertEqual(dirty_verify, 2)
+            self.assertIn("worktree", verify_error.getvalue())
+            dirty_path.unlink()
 
             (repo / "proof-pr.toml").write_text(
                 f"""
@@ -180,6 +198,19 @@ command = [{json.dumps(sys.executable)}, "-c", "raise SystemExit(1)"]
 """.strip(),
                 encoding="utf-8",
             )
+            subprocess.run(["git", "add", "proof-pr.toml"], cwd=repo, check=True)
+            subprocess.run(
+                ["git", "commit", "-m", "test: change verification config"],
+                cwd=repo,
+                check=True,
+            )
+
+            status_output = io.StringIO()
+            with redirect_stdout(status_output):
+                stale_status = main(["status", "--repo", str(repo)])
+            self.assertEqual(stale_status, 1)
+            self.assertIn("STALE", status_output.getvalue())
+
             exit_code = main(
                 [
                     "verify",
@@ -200,6 +231,18 @@ command = [{json.dumps(sys.executable)}, "-c", "raise SystemExit(1)"]
             )
             self.assertEqual(override_payload["base_sha"], base_sha)
             self.assertEqual(override_payload["checks"][0]["name"], "override")
+            self.assertEqual(
+                main(
+                    [
+                        "status",
+                        "--repo",
+                        str(repo),
+                        "--report",
+                        ".proof-pr/override/report.json",
+                    ]
+                ),
+                0,
+            )
 
 
 if __name__ == "__main__":

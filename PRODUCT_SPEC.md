@@ -36,9 +36,13 @@ The command:
 1. records the repository HEAD and resolved base revision;
 2. lists files changed between the base and HEAD;
 3. runs each explicitly supplied check without a shell;
-4. records command, duration, exit code, and bounded output;
-5. writes `.proof-pr/report.json` and `.proof-pr/report.md`;
-6. returns a failing exit code when any check fails.
+4. confirms HEAD and the clean worktree did not change while checks ran;
+5. records command, duration, exit code, and bounded output;
+6. writes `.proof-pr/report.json` and `.proof-pr/report.md`;
+7. returns a failing exit code when any check fails.
+
+`proof-pr status` compares saved evidence with the current HEAD and worktree. It
+returns `STALE` when either has changed since verification.
 
 ## Acceptance criteria
 
@@ -51,6 +55,8 @@ The command:
 - A smoke test runs the CLI against a real temporary Git repository.
 - Repository defaults are explicit argv arrays in a reviewable `proof-pr.toml`.
 - CLI values override repository defaults for one-off verification.
+- Verification refuses a dirty worktree and detects repository changes during checks.
+- Saved evidence reports `STALE` after a new commit or uncommitted code change.
 
 ## Non-goals
 
@@ -63,6 +69,6 @@ The command:
 
 ## Next slices
 
-1. Diff-to-test evidence and stale-report detection.
+1. Diff-to-test evidence and reusable policy gates.
 2. GitHub Action and sticky PR evidence comment.
 3. Signed provenance and reusable policy gates.

@@ -52,6 +52,22 @@ proof-pr verify \
   --check "lint::ruff check ."
 ```
 
+## Evidence freshness
+
+Check whether the saved evidence still applies to the current checkout:
+
+```bash
+proof-pr status
+```
+
+The command returns `STALE` when HEAD changed after verification or the
+worktree contains uncommitted files. It exits successfully only when the saved
+report is both `VERIFIED` and current.
+
+`proof-pr verify` also requires a clean worktree and confirms that HEAD and the
+worktree stayed unchanged while checks ran. Generated `report.json` and
+`report.md` files are excluded from that cleanliness check.
+
 Outputs:
 
 - `.proof-pr/report.json` for automation;
