@@ -1,0 +1,16 @@
+[verify]
+base = "main"
+timeout = 600
+output_dir = ".proof-pr"
+
+[[verify.checks]]
+name = "tests"
+command = ["python3", "-m", "unittest", "-v"]
+
+[[verify.checks]]
+name = "lint"
+command = ["ruff", "check", "src", "tests"]
+
+[[verify.checks]]
+name = "format"
+command = ["ruff", "format", "--check", "src", "tests"]

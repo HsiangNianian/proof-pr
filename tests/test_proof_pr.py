@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from proof_pr.cli import main
+from proof_pr.config import ConfigError, load_config
 from proof_pr.models import CheckResult, EvidenceReport
 from proof_pr.runner import parse_check, run_check
 
@@ -48,6 +49,52 @@ class CheckExecutionTests(unittest.TestCase):
 
         self.assertLessEqual(len(result.stdout), 20)
         self.assertTrue(result.stdout.endswith("x" * 20))
+
+
+class ConfigTests(unittest.TestCase):
+    def test_load_config_reads_repository_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "proof-pr.toml"
+            path.write_text(
+                """
+[verify]
+base = "main"
+timeout = 120
+output_dir = "artifacts/proof-pr"
+
+[[verify.checks]]
+name = "tests"
+command = ["python3", "-m", "unittest", "-v"]
+""".strip(),
+                encoding="utf-8",
+            )
+
+            config = load_config(path)
+
+            self.assertEqual(config.base, "main")
+            self.assertEqual(config.timeout_seconds, 120)
+            self.assertEqual(config.output_dir, Path("artifacts/proof-pr"))
+            self.assertEqual(
+                config.checks,
+                (("tests", ("python3", "-m", "unittest", "-v")),),
+            )
+
+    def test_load_config_rejects_shell_command_strings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "proof-pr.toml"
+            path.write_text(
+                """
+[verify]
+
+[[verify.checks]]
+name = "tests"
+command = "python3 -m unittest"
+""".strip(),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ConfigError, "array of strings"):
+                load_config(path)
 
 
 class ReportTests(unittest.TestCase):
@@ -93,16 +140,24 @@ class CliSmokeTests(unittest.TestCase):
             (repo / "example.txt").write_text("second\n", encoding="utf-8")
             subprocess.run(["git", "add", "example.txt"], cwd=repo, check=True)
             subprocess.run(["git", "commit", "-m", "test: update fixture"], cwd=repo, check=True)
+            (repo / "proof-pr.toml").write_text(
+                f"""
+[verify]
+base = "{base_sha}"
+timeout = 10
+
+[[verify.checks]]
+name = "smoke"
+command = [{json.dumps(sys.executable)}, "-c", "print('ok')"]
+""".strip(),
+                encoding="utf-8",
+            )
 
             exit_code = main(
                 [
                     "verify",
                     "--repo",
                     str(repo),
-                    "--base",
-                    base_sha,
-                    "--check",
-                    f"smoke::{sys.executable} -c \"print('ok')\"",
                 ]
             )
 
@@ -112,6 +167,39 @@ class CliSmokeTests(unittest.TestCase):
             self.assertEqual(payload["base_sha"], base_sha)
             self.assertEqual(payload["changed_files"], ["example.txt"])
             self.assertEqual(payload["verdict"], "VERIFIED")
+            self.assertEqual(payload["checks"][0]["name"], "smoke")
+
+            (repo / "proof-pr.toml").write_text(
+                f"""
+[verify]
+base = "missing-ref"
+
+[[verify.checks]]
+name = "configured"
+command = [{json.dumps(sys.executable)}, "-c", "raise SystemExit(1)"]
+""".strip(),
+                encoding="utf-8",
+            )
+            exit_code = main(
+                [
+                    "verify",
+                    "--repo",
+                    str(repo),
+                    "--base",
+                    base_sha,
+                    "--check",
+                    f"override::{sys.executable} -c \"print('override')\"",
+                    "--output-dir",
+                    ".proof-pr/override",
+                ]
+            )
+
+            self.assertEqual(exit_code, 0)
+            override_payload = json.loads(
+                (repo / ".proof-pr" / "override" / "report.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(override_payload["base_sha"], base_sha)
+            self.assertEqual(override_payload["checks"][0]["name"], "override")
 
 
 if __name__ == "__main__":

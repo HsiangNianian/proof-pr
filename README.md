@@ -7,7 +7,43 @@ portable record of what ran or which revision was checked. `proof-pr` executes
 explicit local checks and generates JSON and Markdown evidence tied to exact Git
 commit SHAs.
 
-## MVP usage
+## Repository setup
+
+Commit a `proof-pr.toml` file so every contributor runs the same checks:
+
+```toml
+[verify]
+base = "main"
+timeout = 600
+
+[[verify.checks]]
+name = "tests"
+command = ["python", "-m", "pytest", "-q"]
+
+[[verify.checks]]
+name = "lint"
+command = ["ruff", "check", "."]
+```
+
+Commands are argv arrays by design: they run without a shell, so pipelines,
+redirects, and environment interpolation are not accepted.
+
+## Usage
+
+Use the repository defaults:
+
+```bash
+proof-pr verify
+```
+
+Override the base ref for a local branch or stacked change:
+
+```bash
+proof-pr verify --base HEAD^
+```
+
+CLI checks replace configured checks when an explicit one-off validation is
+needed:
 
 ```bash
 proof-pr verify \

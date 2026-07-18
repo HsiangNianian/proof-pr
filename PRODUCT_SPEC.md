@@ -14,11 +14,21 @@ claim.
 
 ## First workflow
 
+Projects commit their verification policy as data:
+
+```toml
+[verify]
+base = "main"
+
+[[verify.checks]]
+name = "tests"
+command = ["python", "-m", "pytest", "-q"]
+```
+
+Contributors then run:
+
 ```bash
-proof-pr verify \
-  --base main \
-  --check "tests::python -m pytest -q" \
-  --check "lint::ruff check ."
+proof-pr verify
 ```
 
 The command:
@@ -39,6 +49,8 @@ The command:
 - Captured output is bounded so reports cannot grow without limit.
 - Unit tests cover parsing, passing/failing verdicts, output bounds, and rendering.
 - A smoke test runs the CLI against a real temporary Git repository.
+- Repository defaults are explicit argv arrays in a reviewable `proof-pr.toml`.
+- CLI values override repository defaults for one-off verification.
 
 ## Non-goals
 
@@ -51,7 +63,6 @@ The command:
 
 ## Next slices
 
-1. Repository-native command discovery with explicit user confirmation.
-2. Diff-to-test evidence and stale-report detection.
-3. GitHub Action and sticky PR evidence comment.
-4. Signed provenance and reusable policy gates.
+1. Diff-to-test evidence and stale-report detection.
+2. GitHub Action and sticky PR evidence comment.
+3. Signed provenance and reusable policy gates.
